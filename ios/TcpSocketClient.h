@@ -3,8 +3,8 @@
  * All rights reserved.
  */
 
-#import <Foundation/Foundation.h>
-#import "RCTBridgeModule.h"
+#import <React/RCTBridgeModule.h>
+#import "CocoaAsyncSocket/GCDAsyncSocket.h"
 
 extern NSString *const RCTTCPErrorDomain;
 
@@ -35,11 +35,7 @@ typedef enum RCTTCPError RCTTCPError;
 
 @end
 
-@interface TcpSocketClient : NSObject
-
-@property  BOOL isSecure;
-@property  NSString* nameFilePKCS12;
-@property  NSString* passwordFilePKCS12;
+@interface TcpSocketClient : NSObject<GCDAsyncSocketDelegate>
 
 @property (nonatomic, retain) NSNumber * id;
 @property (nonatomic, weak) id<SocketClientDelegate> clientDelegate;
@@ -101,8 +97,6 @@ typedef enum RCTTCPError RCTTCPError;
  * destroy client
  */
 - (void)destroy;
-
-//- (CFArrayRef) loadCertificates;
 
 
 @end
