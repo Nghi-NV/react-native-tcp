@@ -1,53 +1,85 @@
+# TCP in React Native
 
-# react-native-tcp-ssl
+node's [net](https://nodejs.org/api/net.html) API in React Native
 
-## Getting started
+This module is used by [Peel](http://www.peel.com/)
 
-`$ npm install react-native-tcp-ssl --save`
+## Install
 
-### Mostly automatic installation
+* Create a new react-native project. [Check react-native getting started](http://facebook.github.io/react-native/docs/getting-started.html#content)
 
-`$ react-native link react-native-tcp-ssl`
+* In your project dir:
 
-### Manual installation
+```
+npm install react-native-tcp --save
+```
 
+__Note for iOS:__ If your react-native version < 0.40 install with this tag instead:
+```
+npm install react-native-tcp@3.1.0 --save
+```
 
-#### iOS
+## Link in the native dependency
 
-1. In XCode, in the project navigator, right click `Libraries` ➜ `Add Files to [your project's name]`
-2. Go to `node_modules` ➜ `react-native-tcp-ssl` and add `RNTcpSsl.xcodeproj`
-3. In XCode, in the project navigator, select your project. Add `libRNTcpSsl.a` to your project's `Build Phases` ➜ `Link Binary With Libraries`
-4. Run your project (`Cmd+R`)<
+```
+react-native link react-native-tcp
+```
 
-#### Android
+## Additional dependencies
 
-1. Open up `android/app/src/main/java/[...]/MainActivity.java`
-  - Add `import com.reactlibrary.RNTcpSslPackage;` to the imports at the top of the file
-  - Add `new RNTcpSslPackage()` to the list returned by the `getPackages()` method
-2. Append the following lines to `android/settings.gradle`:
-  	```
-  	include ':react-native-tcp-ssl'
-  	project(':react-native-tcp-ssl').projectDir = new File(rootProject.projectDir, 	'../node_modules/react-native-tcp-ssl/android')
-  	```
-3. Insert the following lines inside the dependencies block in `android/app/build.gradle`:
-  	```
-      compile project(':react-native-tcp-ssl')
-  	```
+### Due to limitations in the react-native packager, streams need to be hacked in with [rn-nodeify](https://www.npmjs.com/package/rn-nodeify)
 
-#### Windows
-[Read it! :D](https://github.com/ReactWindows/react-native)
-
-1. In Visual Studio add the `RNTcpSsl.sln` in `node_modules/react-native-tcp-ssl/windows/RNTcpSsl.sln` folder to their solution, reference from their app.
-2. Open up your `MainPage.cs` app
-  - Add `using Tcp.Ssl.RNTcpSsl;` to the usings at the top of the file
-  - Add `new RNTcpSslPackage()` to the `List<IReactPackage>` returned by the `Packages` method
-
+1. install rn-nodeify as a dev-dependency
+``` npm install --save-dev rn-nodeify ```
+2. run rn-nodeify manually
+``` rn-nodeify --install stream,process,util --hack ```
+3. optionally you can add this as a postinstall script
+``` "postinstall": "rn-nodeify --install stream,process,util --hack" ```
 
 ## Usage
-```javascript
-import RNTcpSsl from 'react-native-tcp-ssl';
 
-// TODO: What to do with the module?
-RNTcpSsl;
+### package.json
+
+_only if you want to write require('net') in your javascript_
+
+```json
+{
+  "browser": {
+    "net": "react-native-tcp"
+  }
+}
 ```
-  
+
+### JS
+
+_see/run [index.ios.js/index.android.js](examples/rctsockets) for a complete example, but basically it's just like net_
+
+```js
+var net = require('net');
+// OR, if not shimming via package.json "browser" field:
+// var net = require('react-native-tcp')
+
+var server = net.createServer(function(socket) {
+  socket.write('excellent!');
+}).listen(12345);
+
+var client = net.createConnection(12345);
+
+client.on('error', function(error) {
+  console.log(error)
+});
+
+client.on('data', function(data) {
+  console.log('message was received', data)
+});
+```
+
+### TODO
+
+add select tests from node's tests for net
+
+PR's welcome!
+
+
+
+_originally forked from [react-native-udp](https://github.com/tradle/react-native-udp)_
