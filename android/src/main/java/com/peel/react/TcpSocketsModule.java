@@ -28,7 +28,7 @@ public final class TcpSocketsModule implements ReactPackage {
         return modules;
     }
 
-    // Deprecated RN 0.47
+    @Override
     public List<Class<? extends JavaScriptModule>> createJSModules() {
         return Collections.emptyList();
     }

@@ -3,11 +3,14 @@
  * All rights reserved.
  */
 
+#import <Foundation/Foundation.h>
+#import <Availability.h>
+#import "GCDAsyncSocket.h"
 #import "TcpSocketClient.h"
+#import "RCTBridgeModule.h"
+#import "RCTBridge.h"
+#import "RCTEventDispatcher.h"
 
-#import <React/RCTEventEmitter.h>
-#import "CocoaAsyncSocket/GCDAsyncSocket.h"
-
-@interface TcpSockets : RCTEventEmitter<SocketClientDelegate>
+@interface TcpSockets : NSObject<SocketClientDelegate, RCTBridgeModule>
 
 @end

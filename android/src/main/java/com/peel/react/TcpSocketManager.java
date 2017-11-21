@@ -3,6 +3,12 @@ package com.peel.react;
 import android.support.annotation.Nullable;
 import android.util.SparseArray;
 
+
+import com.facebook.react.bridge.ReactApplicationContext;
+
+import com.koushikdutta.async.AsyncSSLSocket;
+import com.koushikdutta.async.AsyncSSLSocketWrapper;
+
 import com.koushikdutta.async.AsyncNetworkSocket;
 import com.koushikdutta.async.AsyncServer;
 import com.koushikdutta.async.AsyncServerSocket;
@@ -15,11 +21,39 @@ import com.koushikdutta.async.callback.ConnectCallback;
 import com.koushikdutta.async.callback.DataCallback;
 import com.koushikdutta.async.callback.ListenCallback;
 
+
+import com.facebook.react.bridge.ReactMethod;
+import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.WritableMap;
+
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import android.util.Log;
+
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLSession;
+
+
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.security.KeyStore;
+import java.security.cert.X509Certificate;
+
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
+
+import 	java.io.InputStream;
 
 /**
  * Created by aprock on 12/29/15.
@@ -32,8 +66,11 @@ public final class TcpSocketManager {
 
     private int mInstances = 5000;
 
-    public TcpSocketManager(TcpSocketListener listener) throws IOException {
+    ReactApplicationContext context;
+
+    public TcpSocketManager(TcpSocketListener listener, ReactApplicationContext c) throws IOException {
         mListener = new WeakReference<TcpSocketListener>(listener);
+        context = c;
     }
 
     private void setSocketCallbacks(final Integer cId, final AsyncSocket socket) {
@@ -119,7 +156,7 @@ public final class TcpSocketManager {
         });
     }
 
-    public void connect(final Integer cId, final @Nullable String host, final Integer port) throws UnknownHostException, IOException {
+    public void connect(final Integer cId, final @Nullable String host, final Integer port, final ReadableMap options) throws UnknownHostException, IOException {
         // resolve the address
         final InetSocketAddress socketAddress;
         if (host != null) {
@@ -127,21 +164,103 @@ public final class TcpSocketManager {
         } else {
             socketAddress = new InetSocketAddress(port);
         }
+        final String cert;
+        final String certificatePassword;
+        final String keyStorePassword;
+        if(options != null)
+        {
+
+            cert = options.hasKey("cert") ? options.getString("cert") : null;
+            certificatePassword = options.hasKey("pass") ? options.getString("pass") : null;
+            keyStorePassword = options.hasKey("passkeystore") ? options.getString("passkeystore") : null;
+        }else
+        {
+            cert = null;
+            certificatePassword = null;
+            keyStorePassword = null;
+        }
 
         mServer.connectSocket(socketAddress, new ConnectCallback() {
             @Override
             public void onConnectCompleted(Exception ex, AsyncSocket socket) {
-              TcpSocketListener listener = mListener.get();
-                if (ex == null) {
-                    mClients.put(cId, socket);
-                    setSocketCallbacks(cId, socket);
 
-                    if (listener != null) {
-                        listener.onConnect(cId, socketAddress);
+                if(cert != null)
+                {
+                     try
+                    {
+                        SSLContext sslContext = SSLContext.getInstance("TLS");
+                    KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+
+                    InputStream is = context.getResources().openRawResource(R.raw.lumi);
+                    ks.load(is, keyStorePassword.toCharArray());
+                    // ks.load(SecureSocketKeyStore.asInputStream(),
+                    //         SecureSocketKeyStore.getKeyStorePassword());
+
+                    // Set up key manager factory to use our key store
+                    String algorithm = TrustManagerFactory.getDefaultAlgorithm();
+                    KeyManagerFactory kmf = KeyManagerFactory.getInstance(algorithm);
+                    kmf.init(ks, certificatePassword.toCharArray());
+
+                    TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() {
+                        public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                            return new X509Certificate[0];
+                        }
+
+                        public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {
+                        }
+
+                        public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {
+
+                        }
+                    } };
+                    sslContext.init(kmf.getKeyManagers(), trustAllCerts, null);
+
+                    AsyncSSLSocketWrapper.handshake(socket, host, port,  sslContext.createSSLEngine(),
+                            trustAllCerts, new HostnameVerifier()
+                            {
+                                @Override
+                                public boolean verify(String hostname, SSLSession session) {
+                                    return true;
+                                }
+                            }, true,
+                            new AsyncSSLSocketWrapper.HandshakeCallback() {
+                                @Override
+                                public void onHandshakeCompleted(Exception e, AsyncSSLSocket s) {
+                                    TcpSocketListener listener = mListener.get();
+                                    if (e == null) {
+                                        mClients.put(cId, s);
+                                        setSocketCallbacks(cId, s);
+
+                                        if (listener != null) {
+                                            listener.onConnect(cId, socketAddress);
+                                        }
+                                    } else if (listener != null) {
+                                        listener.onError(cId, e.getMessage());
+                                    }
+                                }
+                            });
+                    }catch (Exception e)
+                    {
+                        TcpSocketListener listener = mListener.get();
+                        if (listener != null) {
+                            listener.onError(cId, e.getMessage());
+                        }
                     }
-                } else if (listener != null) {
-                   listener.onError(cId, ex.getMessage());
-                }
+                    
+                }else
+                {
+                    TcpSocketListener listener = mListener.get();
+                    if (ex == null) {
+                        mClients.put(cId, socket);
+                        setSocketCallbacks(cId, socket);
+
+                        if (listener != null) {
+                            listener.onConnect(cId, socketAddress);
+                        }
+                    } else if (listener != null) {
+                        listener.onError(cId, ex.getMessage());
+                    }
+                }              
             }
         });
     }
