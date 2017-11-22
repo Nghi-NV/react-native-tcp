@@ -37,6 +37,12 @@ typedef enum RCTTCPError RCTTCPError;
 
 @interface TcpSocketClient : NSObject<GCDAsyncSocketDelegate>
 
+
+@property  BOOL isSecure;
+@property  NSString* nameFilePKCS12;
+@property  NSString* passwordFilePKCS12;
+
+
 @property (nonatomic, retain) NSNumber * id;
 @property (nonatomic, weak) id<SocketClientDelegate> clientDelegate;
 

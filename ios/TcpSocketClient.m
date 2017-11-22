@@ -41,6 +41,10 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
 {
     self = [super init];
     if (self) {
+        
+        _isSecure = false;
+        _nameFilePKCS12 = @"";
+        _passwordFilePKCS12 = @"";
         _id = clientID;
         _clientDelegate = aDelegate;
         _pendingSends = [NSMutableDictionary dictionary];
@@ -48,7 +52,6 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
         _tcpSocket = tcpSocket;
         [_tcpSocket setUserData: clientID];
     }
-
     return self;
 }
 
@@ -61,6 +64,14 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
 
         return false;
     }
+    
+    _nameFilePKCS12 = (options?options[@"cert"] : nil);
+    _passwordFilePKCS12 = (options?options[@"pass"] : nil);
+    if(_nameFilePKCS12 && _passwordFilePKCS12)
+    {
+        _isSecure = true;
+    }
+    
 
     _tcpSocket = [[GCDAsyncSocket alloc] initWithDelegate:self delegateQueue:[self methodQueue]];
     [_tcpSocket setUserData: _id];
@@ -227,11 +238,68 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
         RCTLogWarn(@"didConnectToHost with nil clientDelegate for %@", [sock userData]);
         return;
     }
-
-    [_clientDelegate onConnect:self];
-
+    if([self isSecure])
+        [self secureSocket:sock];
+    else
+        [_clientDelegate onConnect:self];
+    
     [sock readDataWithTimeout:-1 tag:_id.longValue];
 }
+
+
+- (void)secureSocket: (GCDAsyncSocket *)sock {
+    SecIdentityRef identityRef = nil;
+    NSString *identityPath = [[NSBundle mainBundle] pathForResource:[self nameFilePKCS12] ofType:@"p12"];
+    NSData *PKCS12Data = [NSData dataWithContentsOfFile:identityPath];
+    CFDataRef inPKCS12Data = (__bridge CFDataRef)PKCS12Data;
+    
+    
+    CFStringRef password = (__bridge CFStringRef)[self passwordFilePKCS12];//CFSTR(pass);//CFSTR("test");
+    const void *keys[] = { kSecImportExportPassphrase };
+    
+    const void *values[] = { password };
+    CFDictionaryRef options = CFDictionaryCreate(NULL, keys, values, 1, NULL, NULL);
+    CFArrayRef items = CFArrayCreate(NULL, 0, 0, NULL);
+    OSStatus securityError = SecPKCS12Import(inPKCS12Data, options, &items);
+    CFRelease(options);
+    CFRelease(password);
+    if (securityError == errSecSuccess) {
+        NSLog(@"Success opening p12 KaliTouch certificate. Items: %ld", CFArrayGetCount(items));
+        CFDictionaryRef identityDict = CFArrayGetValueAtIndex(items, 0);
+        identityRef = (SecIdentityRef)CFDictionaryGetValue(identityDict, kSecImportItemIdentity);
+    } else {
+        NSLog(@"Error opening Certificate.");
+    }
+    
+    
+    SecIdentityRef  certArray[1] = { identityRef };
+    CFArrayRef myCerts = CFArrayCreate(NULL, (void *)certArray, 1, NULL);
+    
+    //    NSArray *certs = [[NSArray alloc] initWithObjects:(__bridge id)identityRef, nil];
+    
+    
+    NSMutableDictionary *setting = [NSMutableDictionary dictionary];
+    [setting setObject:@NO forKey:GCDAsyncSocketSSLIsServer];
+    
+    
+    [setting setObject:[NSNumber numberWithInteger:8] forKey:GCDAsyncSocketSSLProtocolVersionMin];
+    [setting setObject:[NSNumber numberWithInteger:8] forKey:GCDAsyncSocketSSLProtocolVersionMax];
+    
+    
+    [setting setObject:@YES forKey:GCDAsyncSocketManuallyEvaluateTrust];
+    [setting setObject:(id)CFBridgingRelease(myCerts) forKey:GCDAsyncSocketSSLCertificates];
+    
+    
+    [sock startTLS:setting];
+}
+
+- (void)socketDidSecure:(GCDAsyncSocket *)sock {
+    // start receiving messages
+    NSLog(@"socketDidSecure = %@", sock);
+    
+    [_clientDelegate onConnect:self];
+}
+
 
 - (void)socketDidCloseReadStream:(GCDAsyncSocket *)sock
 {

@@ -43,7 +43,7 @@ public final class TcpSockets extends ReactContextBaseJavaModule implements TcpS
         mReactContext = reactContext;
 
         try {
-            socketManager = new TcpSocketManager(this);
+            socketManager = new TcpSocketManager(this, reactContext);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -108,7 +108,7 @@ public final class TcpSockets extends ReactContextBaseJavaModule implements TcpS
             protected void doInBackgroundGuarded(Void... params) {
                 // NOTE : ignoring options for now, just use the available interface.
                 try {
-                    socketManager.connect(cId, host, port);
+                    socketManager.connect(cId, host, port, options);
                 } catch (UnknownHostException uhe) {
                     FLog.e(TAG, "connect", uhe);
                     onError(cId, uhe.getMessage());
