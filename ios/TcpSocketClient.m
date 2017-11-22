@@ -293,6 +293,11 @@ NSString *const RCTTCPErrorDomain = @"RCTTCPErrorDomain";
     [sock startTLS:setting];
 }
 
+- (void)socket:(GCDAsyncSocket *)sock didReceiveTrust:(SecTrustRef)trust completionHandler:(void (^)(BOOL shouldTrustPeer))completionHandler {
+    NSLog(@"didReceiveTrust");
+    if (completionHandler) completionHandler(YES);
+}
+
 - (void)socketDidSecure:(GCDAsyncSocket *)sock {
     // start receiving messages
     NSLog(@"socketDidSecure = %@", sock);
